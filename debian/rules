@@ -7,11 +7,8 @@ DESTDIR    = debian/tmp
 
 include /usr/share/dpkg/default.mk
 
-DEB_KFLAVOR=amd64-vyatta
-DEB_KSUBARCH=none
-
 ifeq (,$(KVERS))
-KVERS := $(shell LIST=$$(ls /lib/modules/); for dir in $$LIST; do test -d /lib/modules/$$dir/build && echo $$dir; done | sort -V | head -1)
+KVERS := $(patsubst linux-headers-%,%,$(shell dpkg-query -W -f='$${Depends}' linux-headers-$(DEB_HOST_ARCH) | sed 's/ .*//'))
 endif
 KVERS_BINARY := $(shell dpkg-query -W -f='$${Version}\n' linux-headers-$(KVERS))
 KVERS_DEPEND := linux-image-$(KVERS) (= $(KVERS_BINARY)) | linux-image-$(KVERS)-signed (= $(KVERS_BINARY)) | linux-image-$(KVERS)-unsigned (= $(KVERS_BINARY))

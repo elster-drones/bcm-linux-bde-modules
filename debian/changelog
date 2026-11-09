@@ -1,3 +1,11 @@
+bcm-linux-bde-modules (6.5.20-1vyatta2+elster1) unstable; urgency=high
+
+  * Use kernel Kbuild for both BDE modules and native amd64/arm64 ABI flags.
+  * Port procfs, ioctl, module init, yield and DMA cache ownership APIs.
+  * Build against the native Linux 7.3.3 Vyatta headers with exact image dependency.
+
+ -- OpenFactory <builds@openfactory.tech>  Mon, 09 Nov 2026 01:15:00 +0000
+
 bcm-linux-bde-modules (6.5.20-1vyatta2) unstable; urgency=medium
 
   [ James Wheatley ]

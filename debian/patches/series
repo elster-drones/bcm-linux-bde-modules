@@ -6,3 +6,4 @@
 add-dpp-dnx-support.patch
 fix-mem-alloc.patch
 alternate-defaults-on-hurricane3.patch
+linux-7.3-kbuild-api.patch

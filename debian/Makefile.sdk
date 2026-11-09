@@ -1,30 +1,14 @@
 # Based on Broadcom training sample MYPROJECT/SRC/MAKEFILE.SDK
 
-# Define platform / host tool type / output directory
-TARGET=linux-vyatta
-export platform=vyatta
-
-# VYATTA
-export MAKE_LOCAL=$(SDK)/debian/Make.local
-
 MODDIR=debian/$(MODPKG)/lib/modules/$(KVER)/kernel/drivers/net
 
-# Build rules, what to make
 all: system_libs
 
-# Use SDK's build infrastructure
-include $(SDK)/make/Make.config
-
-# VYATTA
-clean:
-	$(MAKE) -C $(SDK)/systems/linux/user/$(platform) $@
-
-# A rule to make system-specific libraries (if needed)
-#
-# VYATTA: Building GPL Linux BDE driver instead.
 system_libs:
-	$(MAKE) -C $(SDK)/systems/linux/user/$(platform) \
-	CFLAGS="$(CFLAGS) -I$(SDK)/systems/bde/linux/include -I$(SDK)/systems/bde/shared/include"
+	$(MAKE) -C /lib/modules/$(KVER)/build M=$(CURDIR) modules
+
+clean:
+	$(MAKE) -C /lib/modules/$(KVER)/build M=$(CURDIR) clean
 
 install: system_libs
 	install -d $(MODDIR)
@@ -37,7 +21,7 @@ install: system_libs
 		$(CURDIR)/debian/$(MODPKG)/usr/bin
 	cp $(CURDIR)/debian/udev/10-bcm-module.rules \
 		$(CURDIR)/debian/$(MODPKG)/lib/udev/rules.d
-	cp $(CURDIR)/build/$(TARGET)/$(platform)/*.ko \
+	cp $(CURDIR)/*.ko \
 		$(MODDIR)
 
 

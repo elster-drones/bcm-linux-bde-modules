@@ -5,7 +5,8 @@ Maintainer: Vyatta Package Maintainers <DL-vyatta-help@att.com>
 Build-Depends:
  debhelper (>= 9),
  dh-signobs <!noobs>,
- linux-vyatta-kbuild | linux-headers-amd64 [amd64] | linux-headers
+ linux-headers-amd64 (>= 7.3.3-1elster2) [amd64],
+ linux-headers-arm64 (>= 7.3.3-1elster2) [arm64]
 Standards-Version: 3.9.8
 
 Package: bcm-linux-bde-modules

@@ -1,0 +1,247 @@
+Index: bcm-linux-bde-modules/Kbuild
+===================================================================
+--- /dev/null
++++ bcm-linux-bde-modules/Kbuild
+@@ -0,0 +1,17 @@
++# SPDX-License-Identifier: GPL-2.0-only
++# Compile every object with the installed kernel's configuration and ABI flags.
++obj-m += linux-kernel-bde.o linux-user-bde.o
++shared := systems/linux/kernel/modules/shared/gmodule.o systems/linux/kernel/modules/shared/ksal.o
++linux-kernel-bde-y := systems/bde/linux/kernel/linux-kernel-bde.o \
++ systems/bde/linux/kernel/linux_dma.o systems/bde/linux/kernel/linux_shbde.o \
++ systems/bde/linux/shared/mpool.o systems/bde/shared/shbde_pci.o \
++ systems/bde/shared/shbde_iproc.o systems/bde/shared/shbde_mdio.o $(shared)
++linux-user-bde-y := systems/bde/linux/user/kernel/linux-user-bde.o $(shared)
++ccflags-y += -I$(src)/include -I$(src)/systems \
++ -I$(src)/systems/linux/kernel/modules/include -I$(src)/systems/bde/linux/include \
++ -I$(src)/systems/bde/shared/include -DLINUX -DNO_FILEIO -DNO_CTRL_C -DNO_MEMTUNE \
++ -DLONGS_ARE_64BITS -DPTRS_ARE_64BITS -DSAL_SPL_LOCK_ON_IRQ \
++ -DBDE_LINUX_USE_MSIX_INTERRUPT -DBCM_PETRA_SUPPORT -D__DUNE_LINUX_BCM_CPU_PCIE__ \
++ -DBCM_DNX_SUPPORT -D_SIMPLE_MEMORY_ALLOCATION_=0 -DSAL_BDE_DMA_MEM_DEFAULT=32 \
++ -DSYS_BE_PIO=0 -DSYS_BE_PACKET=0 -DSYS_BE_OTHER=0 -DLE_HOST=1 \
++ -DBCM_PLATFORM_STRING=\"Vyatta\" -DBROADCOM_DEBUG
+Index: bcm-linux-bde-modules/systems/bde/linux/include/linux_dma.h
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/bde/linux/include/linux_dma.h
++++ bcm-linux-bde-modules/systems/bde/linux/include/linux_dma.h
+@@ -38,7 +38,7 @@
+ /* ioremap is broken in kernel */
+ #define IOREMAP(addr, size) ((void *)KSEG1ADDR(addr))
+ #else
+-#define IOREMAP(addr, size) ioremap_nocache(addr, size)
++#define IOREMAP(addr, size) ioremap(addr, size)
+ #endif
+ 
+ #if defined (__mips__)
+Index: bcm-linux-bde-modules/systems/bde/linux/user/kernel/linux-user-bde.c
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/bde/linux/user/kernel/linux-user-bde.c
++++ bcm-linux-bde-modules/systems/bde/linux/user/kernel/linux-user-bde.c
+@@ -118,7 +118,7 @@ be made.
+ #define HX5_INTC_INTR_STATUS_BASE          (HX5_INTC_INTR_STATUS_REG0)
+ #define HX5_INTC_INTR_RAW_STATUS_BASE      (HX5_INTC_INTR_RAW_STATUS_REG0)
+ 
+-#define IOREMAP(addr, size)                ioremap_nocache(addr, size)
++#define IOREMAP(addr, size)                ioremap(addr, size)
+ 
+ #define HX5_IHOST_GICD_ISENABLERN_0        (0x10781100)
+ #define HX5_IHOST_GICD_ISENABLERN_1        (0x10781104)
+Index: bcm-linux-bde-modules/systems/linux/kernel/modules/include/lkm.h
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/linux/kernel/modules/include/lkm.h
++++ bcm-linux-bde-modules/systems/linux/kernel/modules/include/lkm.h
+@@ -162,7 +162,7 @@
+         _entry = proc_create_data(_name, _acc, _path, _fops, _data);    \
+     } while (0)
+ 
+-#define PROC_PDE_DATA(_node) PDE_DATA(_node)
++#define PROC_pde_data(_node) pde_data(_node)
+ 
+ #else
+ #define PROC_CREATE(_entry, _name, _acc, _path, _fops)                  \
+@@ -182,7 +182,7 @@
+         }                                                               \
+     } while (0)
+ 
+-#define PROC_PDE_DATA(_node) PROC_I(_node)->pde->data
++#define PROC_pde_data(_node) PROC_I(_node)->pde->data
+ #endif
+ 
+ #endif /* __COMMON_LINUX_KRN_LKM_H__ */
+Index: bcm-linux-bde-modules/systems/linux/kernel/modules/shared/gmodule.c
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/linux/kernel/modules/shared/gmodule.c
++++ bcm-linux-bde-modules/systems/linux/kernel/modules/shared/gmodule.c
+@@ -143,13 +143,12 @@ static int _gmodule_proc_release(struct
+     return single_release(inode, file);
+ }
+ 
+-struct file_operations _gmodule_proc_fops = {
+-    owner:      THIS_MODULE,
+-    open:       _gmodule_proc_open,
+-    read:       seq_read,
+-    llseek:     seq_lseek,
+-    write:      _gmodule_proc_write,
+-    release:    _gmodule_proc_release,
++static const struct proc_ops _gmodule_proc_fops = {
++    .proc_open = _gmodule_proc_open,
++    .proc_read = seq_read,
++    .proc_lseek = seq_lseek,
++    .proc_write = _gmodule_proc_write,
++    .proc_release = _gmodule_proc_release,
+ };
+ #else
+ int
+@@ -265,7 +264,6 @@ _gmodule_release(struct inode *inode, st
+     return 0;
+ }
+ 
+-#ifdef HAVE_UNLOCKED_IOCTL
+ static long
+ _gmodule_unlocked_ioctl(struct file *filp,
+                         unsigned int cmd, unsigned long arg)
+@@ -276,20 +274,8 @@ _gmodule_unlocked_ioctl(struct file *fil
+ 	return -1;
+     }
+ }
+-#else
+-static int 
+-_gmodule_ioctl(struct inode *inode, struct file *filp,
+-	       unsigned int cmd, unsigned long arg)
+-{
+-    if(_gmodule->ioctl) {
+-	return _gmodule->ioctl(cmd, arg);
+-    } else {
+-	return -1;
+-    }
+-}
+-#endif
+ 
+-#ifdef HAVE_COMPAT_IOCTL
++#ifdef CONFIG_COMPAT
+ static long
+ _gmodule_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+ {
+@@ -309,7 +295,7 @@ _gmodule_mmap(struct file *filp, struct
+         return _gmodule->mmap(filp, vma);
+     }
+ #ifdef BCM_PLX9656_LOCAL_BUS
+-	vma->vm_flags |= VM_RESERVED | VM_IO;
++	vm_flags_set(vma, VM_DONTEXPAND | VM_DONTDUMP | VM_IO);
+ 	pgprot_val(vma->vm_page_prot) |= _PAGE_NO_CACHE | _PAGE_GUARDED;
+ 
+ 	if (io_remap_pfn_range(	vma,
+@@ -328,22 +314,18 @@ _gmodule_mmap(struct file *filp, struct
+ /* FILE OPERATIONS */
+ 
+ struct file_operations _gmodule_fops = {
+-#ifdef HAVE_UNLOCKED_IOCTL
+-    unlocked_ioctl: _gmodule_unlocked_ioctl,
+-#else
+-    ioctl:      _gmodule_ioctl,
+-#endif
++    .unlocked_ioctl = _gmodule_unlocked_ioctl,
+     open:       _gmodule_open,
+     release:    _gmodule_release,
+     mmap:       _gmodule_mmap,
+-#ifdef HAVE_COMPAT_IOCTL
++#ifdef CONFIG_COMPAT
+     compat_ioctl: _gmodule_compat_ioctl,
+ #endif
+ };
+ 
+ 
+-void __exit
+-cleanup_module(void)
++static void __exit
++gmodule_exit(void)
+ {
+     if(!_gmodule) return;
+   
+@@ -365,8 +347,8 @@ cleanup_module(void)
+ #endif
+ }
+ 
+-int __init
+-init_module(void)
++static int __init
++gmodule_init(void)
+ {  
+     int rc;
+ 
+@@ -425,3 +407,6 @@ init_module(void)
+ 
+     return 0; /* succeed */
+ }
++
++module_init(gmodule_init);
++module_exit(gmodule_exit);
+Index: bcm-linux-bde-modules/systems/bde/linux/kernel/linux_dma.c
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/bde/linux/kernel/linux_dma.c
++++ bcm-linux-bde-modules/systems/bde/linux/kernel/linux_dma.c
+@@ -959,33 +959,19 @@ _sfree(int d, void *ptr)
+ int
+ _sinval(int d, void *ptr, int length)
+ {
+-#if defined(dma_cache_wback_inv)
+-     dma_cache_wback_inv((unsigned long)ptr, length);
+-#else
+-#if defined(IPROC_CMICD) || defined(BCM958525)
+-    /* FIXME: need proper function to replace dma_cache_sync */
+-    dma_sync_single_for_cpu(NULL, (unsigned long)ptr, length, DMA_BIDIRECTIONAL);
+-#else
+-    dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
+-#endif
+-#endif
++    /* Only streaming mappings need cache ownership transfers. */
++    if (_use_dma_mapping && DMA_DEV(d))
++        dma_sync_single_for_cpu(DMA_DEV(d), _l2p(d, ptr), length,
++                                DMA_BIDIRECTIONAL);
+     return 0;
+ }
+ 
+ int
+ _sflush(int d, void *ptr, int length)
+ {
+-#if defined(dma_cache_wback_inv)
+-    dma_cache_wback_inv((unsigned long)ptr, length);
+-#else
+-#if defined(IPROC_CMICD) || defined(BCM958525)
+-    /* FIXME: need proper function to replace dma_cache_sync */
+-    dma_sync_single_for_cpu(NULL, (unsigned long)ptr, length, DMA_BIDIRECTIONAL);
+-#else
+-    dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
+-#endif
+-#endif
+-
++    if (_use_dma_mapping && DMA_DEV(d))
++        dma_sync_single_for_device(DMA_DEV(d), _l2p(d, ptr), length,
++                                   DMA_BIDIRECTIONAL);
+     return 0;
+ }
+ 
+Index: bcm-linux-bde-modules/systems/linux/kernel/modules/shared/ksal.c
+===================================================================
+--- bcm-linux-bde-modules.orig/systems/linux/kernel/modules/shared/ksal.c
++++ bcm-linux-bde-modules/systems/linux/kernel/modules/shared/ksal.c
+@@ -35,18 +35,7 @@
+ #endif
+ #include <linux/time.h>
+ 
+-#ifdef MAX_USER_RT_PRIO
+-/* Assume 2.6 scheduler */
+-#define SAL_YIELD(task) \
+-    yield()
+-#else
+-/* Assume 2.4 scheduler */
+-#define SAL_YIELD(task) \
+-do { \
+-    task->policy |= SCHED_YIELD; \
+-    schedule(); \
+-} while (0)
+-#endif
++#define SAL_YIELD(task) yield()
+ 
+ #define SECOND_USEC (1000000)
+ #define USECS_PER_JIFFY (SECOND_USEC / HZ)
