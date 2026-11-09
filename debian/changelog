@@ -1,3 +1,10 @@
+bcm-linux-bde-modules (6.5.20-1vyatta2+elster2) unstable; urgency=medium
+
+  * Include the exact kernel package version in the module binary version,
+    so APT upgrades signed modules alongside same-ABI kernel updates.
+
+ -- OpenFactory <builds@openfactory.tech>  Mon, 09 Nov 2026 06:45:00 +0000
+
 bcm-linux-bde-modules (6.5.20-1vyatta2+elster1) unstable; urgency=high
 
   * Use kernel Kbuild for both BDE modules and native amd64/arm64 ABI flags.

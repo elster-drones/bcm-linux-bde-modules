@@ -61,3 +61,7 @@ override_dh_auto_clean:
 		echo "Package: $(MODPKGBASE)" >> debian/control; \
 		echo 'Architecture: any' >> debian/control; \
 	fi
+
+# Rebuilds for a newer image in the same ABI must upgrade the module too.
+override_dh_gencontrol:
+	dh_gencontrol -- -v$(DEB_VERSION)+$(KVERS_BINARY)
